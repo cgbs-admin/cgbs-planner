@@ -81,6 +81,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     }
   }, [activeView]);
 
+
+  const showMobileFab = isMobile && activeView === "events";
+
   // Prevent background scroll when mobile nav or wizard is open
   useEffect(() => {
     const shouldLock = mobileNavOpen || showCreateWizard;
@@ -248,7 +251,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     cursor: "pointer",
     boxShadow: shadows.button,
     zIndex: 30,
-    display: isMobile ? "inline-flex" : "none",
+    display: showMobileFab ? "inline-flex" : "none",
     alignItems: "center",
     justifyContent: "center",
   };
@@ -490,17 +493,19 @@ const AppLayout: React.FC<AppLayoutProps> = ({
       </div>
 
       {/* Mobile FAB: create event */}
-      <button
-        type="button"
-        aria-label="Event erstellen"
-        style={fabStyle}
-        onClick={() => {
-          setMobileNavOpen(false);
-          setShowCreateWizard(true);
-        }}
-      >
-        +
-      </button>
+      {showMobileFab && (
+        <button
+                type="button"
+                aria-label="Event erstellen"
+                style={fabStyle}
+                onClick={() => {
+                  setMobileNavOpen(false);
+                  setShowCreateWizard(true);
+                }}
+              >
+                +
+              </button>
+      )}
 
       {/* Create Event Wizard Modal */}
       {showCreateWizard && (
