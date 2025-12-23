@@ -15,4 +15,4 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            /home/deploy/apps/cgbs-planner/deploy.sh
+            bash /home/deploy/apps/cgbs-planner/deploy.sh
