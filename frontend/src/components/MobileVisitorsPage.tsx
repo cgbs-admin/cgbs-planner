@@ -22,25 +22,6 @@ type MobileEvent = {
 type VisitorsByEvent = Record<number, string>;
 type SavedVisitorsByEvent = Record<number, number>;
 
-type ReportingRow = {
-  id?: number;
-  event_id?: number | string;
-  eventId?: number | string;
-  event_date?: string | null;
-  eventDate?: string | null;
-  event_start_time?: string | null;
-  eventStartTime?: string | null;
-  event_title?: string | null;
-  eventTitle?: string | null;
-  visitor?: number | string | null;
-  visitors?: number | string | null;
-  besucher?: number | string | null;
-  visitor_count?: number | string | null;
-  count?: number | string | null;
-  value?: number | string | null;
-  created_at?: string | null;
-  timestamp?: string | null;
-};
 
 const LOCAL_STORAGE_KEY = "mobileVisitors.savedVisitors";
 
@@ -151,30 +132,14 @@ const loadSavedVisitorsFromReporting = useCallback(
     const eventIds = eventList.map((e) => e.id);
     if (eventIds.length === 0) return {};
 
-    const normalizeRows = (json: any): ReportingRow[] | null => {
-      if (Array.isArray(json)) return json as ReportingRow[];
-      if (json && Array.isArray(json.items)) return json.items as ReportingRow[];
-      if (json && Array.isArray(json.data)) return json.data as ReportingRow[];
-      if (json && Array.isArray(json.results)) return json.results as ReportingRow[];
-      return null;
-    };
-
-    const getEventId = (row: ReportingRow): number | null => {
-      // Root cause fix: reporting rows are mapped strictly by event_id.
-      const raw = (row.event_id ?? row.eventId) as any;
-      const id = Number(raw);
-      return Number.isFinite(id) ? id : null;
-    };
-
-    const getVisitorValue = (row: ReportingRow): number | null => {
+    const parseVisitor = (row: any): number | null => {
       const v =
-        row.visitor ??
-        row.visitors ??
-        row.besucher ??
-        row.visitor_count ??
-        (row as any).visitors_count ??
-        row.count ??
-        row.value ??
+        row?.visitor ??
+        row?.visitors ??
+        row?.besucher ??
+        row?.visitor_count ??
+        row?.count ??
+        row?.value ??
         null;
 
       if (v == null) return null;
@@ -192,120 +157,24 @@ const loadSavedVisitorsFromReporting = useCallback(
       return Number.isFinite(n) ? n : null;
     };
 
-    const pickLatest = (rows: ReportingRow[]): ReportingRow => {
-      const parseTs = (r: ReportingRow): number => {
-        const ts =
-          (r as any).updated_at ??
-          (r as any).created_at ??
-          (r as any).timestamp ??
-          (r as any).ts ??
-          "";
-        const dt = ts ? new Date(String(ts)) : null;
-        const t = dt && !Number.isNaN(dt.getTime()) ? dt.getTime() : -1;
-        return t;
-      };
-
-      const parseId = (r: ReportingRow): number => {
-        const n = Number((r as any).id);
-        return Number.isFinite(n) ? n : -1;
-      };
-
-      return [...rows]
-        .sort((a, b) => {
-          // Prefer rows that actually contain a visitor count
-          const aHas = getVisitorValue(a) != null ? 1 : 0;
-          const bHas = getVisitorValue(b) != null ? 1 : 0;
-          if (aHas !== bHas) return aHas - bHas;
-
-          const aTs = parseTs(a);
-          const bTs = parseTs(b);
-          if (aTs !== bTs) return aTs - bTs;
-
-          const aId = parseId(a);
-          const bId = parseId(b);
-          if (aId !== bId) return aId - bId;
-
-          return 0;
-        })
-        .slice(-1)[0];
-    };
-
-    const buildMapFromRows = (rows: ReportingRow[]): SavedVisitorsByEvent => {
-      const byEvent: Record<number, ReportingRow[]> = {};
-      rows.forEach((row) => {
-        const id = getEventId(row);
-        if (id == null) return;
-        if (!eventIds.includes(id)) return;
-        if (!byEvent[id]) byEvent[id] = [];
-        byEvent[id].push(row);
-      });
-
-      const result: SavedVisitorsByEvent = {};
-      Object.entries(byEvent).forEach(([idStr, list]) => {
-        const id = Number(idStr);
-        const latest = pickLatest(list);
-        const value = getVisitorValue(latest);
-        if (value != null) result[id] = value;
-      });
-      return result;
-    };
-
-    // Preferred: fetch the collection once and map by event_id.
-    // Try a few likely reporting endpoints (some deployments use a trailing slash).
-    const candidates = ["/reporting", "/reporting/"];
-    for (const path of candidates) {
-      try {
-        const r = await apiFetch(path);
-        if (!r.ok) continue;
-        const json = await r.json();
-
-        const rows = normalizeRows(json);
-        if (rows && rows.length > 0) {
-          const mapped = buildMapFromRows(rows);
-          if (Object.keys(mapped).length > 0) return mapped;
-        }
-      } catch {
-        // ignore and try next candidate
-      }
-    }
-
-    // Fallback: fetch per-event (covers APIs that support filtering by query param).
+    // The backend API contract is:
+    //   GET /reporting/by-event/{event_id}  -> List[ReportingRead] (newest first)
+    //   POST /reporting                    -> create/update for event_id
+    // There is no GET /reporting?event_id=... and no /reporting/latest endpoint.
     const result: SavedVisitorsByEvent = {};
-    for (const id of eventIds) {
-      const paths = [
-        `/reporting?event_id=${encodeURIComponent(String(id))}`,
-        `/reporting/?event_id=${encodeURIComponent(String(id))}`,
-        `/reporting?eventId=${encodeURIComponent(String(id))}`,
-        `/reporting/?eventId=${encodeURIComponent(String(id))}`,
-        `/reporting/event/${encodeURIComponent(String(id))}`,
-        `/reporting/event/${encodeURIComponent(String(id))}/`,
-        `/reporting/latest?event_id=${encodeURIComponent(String(id))}`,
-        `/reporting/latest/${encodeURIComponent(String(id))}`,
-      ];
 
-      for (const path of paths) {
-        try {
-          const r = await apiFetch(path);
-          if (!r.ok) continue;
-          const json = await r.json();
-          const rows = normalizeRows(json);
-          if (rows && rows.length > 0) {
-            const latest = pickLatest(rows);
-            const value = getVisitorValue(latest);
-            if (value != null) {
-              result[id] = value;
-              break;
-            }
-          } else if (json && typeof json === "object") {
-            const value = getVisitorValue(json as ReportingRow);
-            if (value != null) {
-              result[id] = value;
-              break;
-            }
-          }
-        } catch {
-          // ignore and try next
-        }
+    for (const id of eventIds) {
+      try {
+        const res = await apiFetch(`/reporting/by-event/${id}`);
+        if (!res.ok) continue;
+        const rows = (await res.json()) as any[];
+        if (!Array.isArray(rows) || rows.length === 0) continue;
+
+        const latest = rows[0];
+        const value = parseVisitor(latest);
+        if (value != null) result[id] = value;
+      } catch {
+        // ignore per-event errors
       }
     }
 
