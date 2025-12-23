@@ -265,6 +265,13 @@ const loadSavedVisitorsFromReporting = useCallback(
     void loadEvents();
   }, [loadEvents]);
 
+  useEffect(() => {
+    if (!successMessage) return;
+    const t = window.setTimeout(() => setSuccessMessage(null), 2500);
+    return () => window.clearTimeout(t);
+  }, [successMessage]);
+
+
   const handleChangeVisitor = (eventId: number, value: string) => {
     setVisitorsInput((prev) => ({
       ...prev,
@@ -424,7 +431,7 @@ const loadSavedVisitorsFromReporting = useCallback(
       separators.push(
         <div
           key={`month-${monthKey}`}
-          className={`${lastMonthKey === "" ? "mt-1" : "mt-4"} mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500`}
+          className={`${lastMonthKey === "" ? "mt-1" : "mt-6"} mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 col-span-full`}
         >
           <div className="h-px flex-1 bg-slate-300" />
           <div>{formatMonthLabel(ev.start_date)}</div>
@@ -439,7 +446,7 @@ const loadSavedVisitorsFromReporting = useCallback(
       separators.push(
         <div
           key={`date-${dateKey}`}
-          className="mb-2 pl-1 text-[11px] font-medium text-slate-600"
+          className="mt-3 pl-1 text-[11px] font-medium text-slate-600 col-span-full"
         >
           {formatDateSeparatorLabel(ev.start_date)}
         </div>
@@ -466,7 +473,7 @@ const loadSavedVisitorsFromReporting = useCallback(
     return (
       <React.Fragment key={ev.id}>
         {separators}
-        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
           <div className="mb-2 flex items-start gap-2">
             <div
               className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold text-slate-900 shadow-sm"
@@ -475,7 +482,7 @@ const loadSavedVisitorsFromReporting = useCallback(
               {categorySymbol}
             </div>
             <div className="flex-1">
-              <h2 className="text-base font-semibold text-slate-900">
+              <h2 className="text-base font-medium text-slate-900">
                 {ev.title}
               </h2>
               <div className="mt-0.5 text-xs text-slate-600">
@@ -501,7 +508,14 @@ const loadSavedVisitorsFromReporting = useCallback(
                 inputMode="numeric"
                 value={visitorsInput[ev.id] ?? ""}
                 onChange={(e) => handleChangeVisitor(ev.id, e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handleSaveVisitor(ev.id);
+                  }
+                }}
+                autoComplete="off"
+                className="w-full rounded-xl border border-slate-300 px-3 py-3 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 placeholder="Zahl eingeben"
               />
             </div>
@@ -509,7 +523,7 @@ const loadSavedVisitorsFromReporting = useCallback(
               type="button"
               onClick={() => handleSaveVisitor(ev.id)}
               disabled={savingFor === ev.id}
-              className="mt-1 inline-flex items-center justify-center rounded-full bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-75 sm:mt-0 sm:ml-2"
+              className="mt-1 inline-flex w-full items-center justify-center rounded-full bg-indigo-600 px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-75 sm:mt-0 sm:ml-2 sm:w-auto sm:px-4 sm:py-2 sm:text-xs"
             >
               {savingFor === ev.id ? "Speichern…" : "Speichern"}
             </button>
@@ -518,7 +532,7 @@ const loadSavedVisitorsFromReporting = useCallback(
           {saved != null && (
             <div className="mt-2 text-[11px] text-slate-500">
               Aktuell gespeicherte Besucherzahl:{" "}
-              <span className="font-semibold text-slate-800">{saved}</span>
+              <span className="font-medium text-slate-800">{saved}</span>
             </div>
           )}
         </div>
@@ -527,34 +541,46 @@ const loadSavedVisitorsFromReporting = useCallback(
   });
 
   return (
-    <div className="min-h-screen bg-slate-100 px-3 py-3">
-      <div className="mx-auto max-w-md">
-        {loading && (
+    <div className="px-3 py-3 md:px-6 md:py-6">
+      <div className="mx-auto w-full max-w-5xl">
+{loading && (
           <p className="mb-2 text-xs text-slate-500">Lade Events…</p>
         )}
 
         {error && (
-          <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          <div
+            className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
+            role="alert"
+            aria-live="polite"
+          >
             {error}
           </div>
         )}
 
         {successMessage && (
-          <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+          <div
+            className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700"
+            role="status"
+            aria-live="polite"
+          >
             {successMessage}
           </div>
         )}
 
         {!loading && !hasEvents && !error && (
           <p className="text-xs text-slate-500">
-            Es sind aktuell keine zukünftigen Gottesdienste mit Startzeit vorhanden.
+            Es sind aktuell keine zukünftigen Gottesdienste mit Startzeit
+            vorhanden.
           </p>
         )}
 
-        <div className="space-y-2">{groupedList}</div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {groupedList}
+        </div>
       </div>
     </div>
   );
 };
+
 
 export default MobileVisitorsPage;
