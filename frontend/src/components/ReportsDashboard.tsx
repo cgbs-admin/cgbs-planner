@@ -453,8 +453,8 @@ setNewDate("");
       if (!byDate[key]) {
         byDate[key] = { date: key, totalVisitors: 0 };
       }
-      const visitors = point.visitors ?? 0;
-      const current = byDate[key][titleKey] || 0;
+      const visitors = Number(point.visitors ?? 0);
+      const current = Number(byDate[key][titleKey] ?? 0);
       byDate[key][titleKey] = current + visitors;
       byDate[key].totalVisitors += visitors;
 
