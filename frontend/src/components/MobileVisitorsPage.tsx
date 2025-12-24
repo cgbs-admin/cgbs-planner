@@ -118,8 +118,7 @@ const MobileVisitorsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const [visitorsInput, setVisitorsInput] = useState<VisitorsByEvent>({});
-  // Keep last known values as a fallback, but the UI label should reflect
-  // values coming from the reporting database.
+  // Saved visitor counts shown in the UI come from the reporting database.
   const [savedVisitors, setSavedVisitors] = useState<SavedVisitorsByEvent>(() =>
     loadSavedVisitorsFromStorage()
   );
@@ -231,28 +230,14 @@ const loadSavedVisitorsFromReporting = useCallback(
 
       // Input must always be blank on refresh.
       setVisitorsInput({});
-
-      const eventIds = onlyFutureGottesdienste.map((ev) => ev.id);
       const fromReporting = await loadSavedVisitorsFromReporting(onlyFutureGottesdienste);
 
-      // Fallbacks (only used if reporting does not return a value):
-      // 1) previous localStorage values for the same event
-      // 2) besucherzahl on event if present
-      const stored = loadSavedVisitorsFromStorage();
-      const fallback: SavedVisitorsByEvent = {};
-      eventIds.forEach((id) => {
-        if (fromReporting[id] != null) return;
-        if (stored[id] != null) {
-          fallback[id] = stored[id];
-          return;
-        }
-        const ev = onlyFutureGottesdienste.find((e) => e.id === id);
-        if (ev?.besucherzahl != null) fallback[id] = ev.besucherzahl;
-      });
-
-      const merged: SavedVisitorsByEvent = { ...fallback, ...fromReporting };
-      setSavedVisitors(merged);
-      saveVisitorsToStorage(merged);
+      // IMPORTANT:
+      // The label "Aktuell gespeicherte Besucherzahl" must reflect ONLY what exists in the reporting DB.
+      // We intentionally do NOT fall back to localStorage here, otherwise deleted backend records would
+      // still show stale values.
+      setSavedVisitors(fromReporting);
+      saveVisitorsToStorage(fromReporting);
     } catch (err: any) {
       console.error("Error loading mobile events", err);
       setError(err?.message ?? "Events konnten nicht geladen werden.");
@@ -395,6 +380,15 @@ const loadSavedVisitorsFromReporting = useCallback(
           if (refreshed[eventId] != null) {
             setSavedVisitors((prev) => {
               const next = { ...prev, [eventId]: refreshed[eventId] };
+              saveVisitorsToStorage(next);
+              return next;
+            });
+          } else {
+            // If the backend has no record anymore, remove any stale local value.
+            setSavedVisitors((prev) => {
+              if (!(eventId in prev)) return prev;
+              const next = { ...prev };
+              delete next[eventId];
               saveVisitorsToStorage(next);
               return next;
             });

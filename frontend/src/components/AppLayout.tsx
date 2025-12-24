@@ -161,6 +161,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({
     background: `linear-gradient(180deg, ${colors.panelBgSoft} 0%, ${colors.panelBg} 100%)`,
     borderRight: `1px solid ${colors.border}`,
     boxShadow: shadows.panelSoft,
+    position: "sticky",
+    top: 0,
     display: "flex",
     flexDirection: "column",
     minHeight: "100vh",
@@ -258,6 +260,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({
 
   const shellStyle: React.CSSProperties = {
     minHeight: "100vh",
+    height: "100vh",
+    overflow: "hidden",
     display: "flex",
     background: `radial-gradient(1200px 500px at 25% -10%, rgba(79, 70, 229, 0.12), transparent 55%),
                 radial-gradient(900px 400px at 90% 0%, rgba(79, 70, 229, 0.08), transparent 55%),
