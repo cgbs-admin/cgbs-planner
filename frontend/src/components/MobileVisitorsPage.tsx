@@ -535,8 +535,7 @@ const loadSavedVisitorsFromReporting = useCallback(
   });
 
   return (
-    <div className="px-3 py-3 md:px-6 md:py-6">
-      <div className="mx-auto w-full max-w-5xl">
+    <div className="w-full">
 {loading && (
           <p className="mb-2 text-xs text-slate-500">Lade Events…</p>
         )}
@@ -571,7 +570,6 @@ const loadSavedVisitorsFromReporting = useCallback(
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {groupedList}
         </div>
-      </div>
     </div>
   );
 };

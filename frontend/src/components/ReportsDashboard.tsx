@@ -66,9 +66,51 @@ const ReportsDashboard: React.FC = () => {
   const [filterYear, setFilterYear] = useState<string>("");
   const [filterQuarter, setFilterQuarter] = useState<string>("");
 
-  // Sorting for raw table
+  
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+// Sorting for raw table
   const [sortColumn, setSortColumn] = useState<"date" | "visitors">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  const IconPlus = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+
+  const IconEdit = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
+  const IconTrash = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M3 6h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M8 6V4h8v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M19 6l-1 14H6L5 6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+
+  const IconCheck = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+
+  const IconX = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+
 
   // Inline editing / CRUD state for reporting rows
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -77,6 +119,7 @@ const ReportsDashboard: React.FC = () => {
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   // Simple "new reporting row" form (manual entries)
+  const [newEventId, setNewEventId] = useState<string>("");
   const [newDate, setNewDate] = useState<string>("");
   const [newStartTime, setNewStartTime] = useState<string>("");
   const [newTitle, setNewTitle] = useState<string>("");
@@ -230,8 +273,9 @@ const ReportsDashboard: React.FC = () => {
       return;
     }
 
-    // For manuell erfasste Zeilen verwenden wir standardmäßig Event-ID 99
-    const eventIdNum = 99;
+    // Für manuell erfasste Zeilen verwenden wir standardmäßig Event-ID 99, optional überschreibbar
+    const parsedEventId = Number(newEventId);
+    const eventIdNum = Number.isFinite(parsedEventId) && parsedEventId > 0 ? parsedEventId : 99;
 
     setCreating(true);
     try {
@@ -258,7 +302,8 @@ const ReportsDashboard: React.FC = () => {
       }
 
       // Clear the form and reload
-      setNewDate("");
+            setNewEventId("");
+setNewDate("");
       setNewStartTime("");
       setNewTitle("");
       setNewVisitor("");
@@ -409,9 +454,7 @@ const ReportsDashboard: React.FC = () => {
         byDate[key] = { date: key, totalVisitors: 0 };
       }
       const visitors = point.visitors ?? 0;
-      const currentRaw = byDate[key][titleKey];
-      const current =
-        typeof currentRaw === "number" ? currentRaw : Number(currentRaw) || 0;
+      const current = byDate[key][titleKey] || 0;
       byDate[key][titleKey] = current + visitors;
       byDate[key].totalVisitors += visitors;
 
@@ -579,244 +622,294 @@ const ReportsDashboard: React.FC = () => {
         display: "flex",
         flexDirection: "column",
         gap: "16px",
-        padding: "16px",
-        maxWidth: "1200px",
-        margin: "0 auto",
+        width: "100%",
       }}
     >
-      <h1 style={{ fontSize: "1.5rem", fontWeight: 600, marginBottom: "4px" }}>
-        Besucherstatistik
-      </h1>
-      <p style={{ margin: 0, color: "#555", fontSize: "0.9rem" }}>
-        Auswertung der Besucherzahlen aus den Veranstaltungen. Die Daten werden
-        nach Datum gruppiert, mit einer Linie pro Veranstaltungstitel.
-      </p>
-
-      {/* Filter Bar */}
+{/* Filter Bar */}
       <div
         style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "12px",
-          alignItems: "flex-end",
-          padding: "12px 16px",
-          borderRadius: "8px",
-          border: "1px solid #e0e0e0",
-          background: "#fafafa",
+          borderRadius: "12px",
+          border: "1px solid #e2e8f0",
+          background: "#ffffff",
+          padding: "12px 14px",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+          marginBottom: "8px",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", minWidth: "160px" }}>
-          <label
-            htmlFor="report-start-date"
-            style={{ fontSize: "0.8rem", marginBottom: "4px", color: "#333" }}
-          >
-            Startdatum
-          </label>
-          <input
-            id="report-start-date"
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            style={{
-              padding: "6px 8px",
-              borderRadius: "4px",
-              border: "1px solid #ccc",
-              fontSize: "0.9rem",
-            }}
-          />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", minWidth: "160px" }}>
-          <label
-            htmlFor="report-end-date"
-            style={{ fontSize: "0.8rem", marginBottom: "4px", color: "#333" }}
-          >
-            Enddatum
-          </label>
-          <input
-            id="report-end-date"
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            style={{
-              padding: "6px 8px",
-              borderRadius: "4px",
-              border: "1px solid #ccc",
-              fontSize: "0.9rem",
-            }}
-          />
-        </div>
-
-        {/* Additional client-side filters */}
         <div
           style={{
             display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
             flexWrap: "wrap",
-            gap: "8px",
-            marginTop: "8px",
+            marginBottom: "10px",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", minWidth: "140px" }}>
-            <label style={{ fontSize: "0.75rem", marginBottom: "2px", color: "#333" }}>
-              Ferien enthält
-            </label>
-            <input
-              type="text"
-              value={filterVacation}
-              onChange={(e) => setFilterVacation(e.target.value)}
-              style={{
-                padding: "4px 6px",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-                fontSize: "0.8rem",
-              }}
-              placeholder="z.B. Herbst"
-            />
-          </div>
+          <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "#0f172a" }}>Filter</div>
 
-          <div style={{ display: "flex", flexDirection: "column", minWidth: "140px" }}>
-            <label style={{ fontSize: "0.75rem", marginBottom: "2px", color: "#333" }}>
-              Feiertag enthält
-            </label>
-            <input
-              type="text"
-              value={filterHoliday}
-              onChange={(e) => setFilterHoliday(e.target.value)}
-              style={{
-                padding: "4px 6px",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-                fontSize: "0.8rem",
-              }}
-              placeholder="z.B. Reformation"
-            />
-          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+            {(startDate ||
+              endDate ||
+              filterVacation ||
+              filterHoliday ||
+              filterSpecial ||
+              filterStartTime ||
+              filterMonth ||
+              filterYear ||
+              filterQuarter) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStartDate("");
+                  setEndDate("");
+                  setFilterVacation("");
+                  setFilterHoliday("");
+                  setFilterSpecial("");
+                  setFilterStartTime("");
+                  setFilterMonth("");
+                  setFilterYear("");
+                  setFilterQuarter("");
+                }}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  color: "#4f46e5",
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                Zurücksetzen
+              </button>
+            )}
 
-          <div style={{ display: "flex", flexDirection: "column", minWidth: "140px" }}>
-            <label style={{ fontSize: "0.75rem", marginBottom: "2px", color: "#333" }}>
-              Special enthält
-            </label>
-            <input
-              type="text"
-              value={filterSpecial}
-              onChange={(e) => setFilterSpecial(e.target.value)}
+            <button
+              type="button"
+              onClick={() => setFiltersExpanded((prev) => !prev)}
               style={{
-                padding: "4px 6px",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
+                border: "none",
+                background: "transparent",
+                color: "#334155",
                 fontSize: "0.8rem",
-              }}
-              placeholder="z.B. Lobpreis"
-            />
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", minWidth: "120px" }}>
-            <label style={{ fontSize: "0.75rem", marginBottom: "2px", color: "#333" }}>
-              Startzeit
-            </label>
-            <input
-              type="text"
-              value={filterStartTime}
-              onChange={(e) => setFilterStartTime(e.target.value)}
-              style={{
-                padding: "4px 6px",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-                fontSize: "0.8rem",
-              }}
-              placeholder="HH oder HH:MM"
-            />
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", minWidth: "100px" }}>
-            <label style={{ fontSize: "0.75rem", marginBottom: "2px", color: "#333" }}>
-              Monat
-            </label>
-            <select
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(e.target.value)}
-              style={{
-                padding: "4px 6px",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-                fontSize: "0.8rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                padding: 0,
               }}
             >
-              <option value="">Alle</option>
-              <option value="1">Januar</option>
-              <option value="2">Februar</option>
-              <option value="3">März</option>
-              <option value="4">April</option>
-              <option value="5">Mai</option>
-              <option value="6">Juni</option>
-              <option value="7">Juli</option>
-              <option value="8">August</option>
-              <option value="9">September</option>
-              <option value="10">Oktober</option>
-              <option value="11">November</option>
-              <option value="12">Dezember</option>
-            </select>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", minWidth: "90px" }}>
-            <label style={{ fontSize: "0.75rem", marginBottom: "2px", color: "#333" }}>
-              Jahr
-            </label>
-            <input
-              type="text"
-              value={filterYear}
-              onChange={(e) => setFilterYear(e.target.value)}
-              style={{
-                padding: "4px 6px",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-                fontSize: "0.8rem",
-              }}
-              placeholder="z.B. 2025"
-            />
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", minWidth: "100px" }}>
-            <label style={{ fontSize: "0.75rem", marginBottom: "2px", color: "#333" }}>
-              Quartal
-            </label>
-            <select
-              value={filterQuarter}
-              onChange={(e) => setFilterQuarter(e.target.value)}
-              style={{
-                padding: "4px 6px",
-                borderRadius: "4px",
-                border: "1px solid #ccc",
-                fontSize: "0.8rem",
-              }}
-            >
-              <option value="">Alle</option>
-              <option value="1">Q1</option>
-              <option value="2">Q2</option>
-              <option value="3">Q3</option>
-              <option value="4">Q4</option>
-            </select>
+              {filtersExpanded ? "Filter ausblenden" : "Filter anzeigen"}
+            </button>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleApplyFilter}
-          disabled={state.loading}
+        {/* Always visible */}
+        <div
           style={{
-            padding: "8px 16px",
-            borderRadius: "4px",
-            border: "none",
-            fontSize: "0.9rem",
-            fontWeight: 500,
-            cursor: state.loading ? "default" : "pointer",
-            background: state.loading ? "#bbb" : "#4a6cf7",
-            color: "#fff",
-            marginLeft: "auto",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: "10px",
+            alignItems: "end",
           }}
         >
-          {state.loading ? "Lädt..." : "Filter anwenden"}
-        </button>
+          <div style={{ display: "flex", flexDirection: "column", minWidth: "160px" }}>
+            <label
+              htmlFor="report-start-date"
+              style={{ fontSize: "0.8rem", marginBottom: "4px", color: "#333" }}
+            >
+              Startdatum
+            </label>
+            <input
+              id="report-start-date"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              style={{
+                padding: "6px 8px",
+                borderRadius: "4px",
+                border: "1px solid #ccc",
+                fontSize: "0.9rem",
+              }}
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", minWidth: "160px" }}>
+            <label
+              htmlFor="report-end-date"
+              style={{ fontSize: "0.8rem", marginBottom: "4px", color: "#333" }}
+            >
+              Enddatum
+            </label>
+            <input
+              id="report-end-date"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              style={{
+                padding: "6px 8px",
+                borderRadius: "4px",
+                border: "1px solid #ccc",
+                fontSize: "0.9rem",
+              }}
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <button
+              type="button"
+              onClick={handleApplyFilter}
+              disabled={state.loading}
+              style={{
+                height: "40px",
+                borderRadius: "10px",
+                border: "1px solid #4f46e5",
+                background: state.loading ? "rgba(79,70,229,0.55)" : "#4f46e5",
+                color: "#ffffff",
+                fontSize: "0.9rem",
+                fontWeight: 600,
+                cursor: state.loading ? "not-allowed" : "pointer",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+              }}
+            >
+              {state.loading ? "Lädt…" : "Filter anwenden"}
+            </button>
+          </div>
+        </div>
+
+        {/* Expanded filters */}
+        {filtersExpanded && (
+          <div
+            style={{
+              marginTop: "12px",
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: "10px",
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", minWidth: "160px" }}>
+              <label style={{ fontSize: "0.8rem", marginBottom: "4px", color: "#333" }}>
+                Ferien enthält
+              </label>
+              <input
+                type="text"
+                value={filterVacation}
+                onChange={(e) => setFilterVacation(e.target.value)}
+                style={{
+                  padding: "6px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid #ccc",
+                  fontSize: "0.9rem",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", minWidth: "160px" }}>
+              <label style={{ fontSize: "0.8rem", marginBottom: "4px", color: "#333" }}>
+                Feiertag enthält
+              </label>
+              <input
+                type="text"
+                value={filterHoliday}
+                onChange={(e) => setFilterHoliday(e.target.value)}
+                style={{
+                  padding: "6px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid #ccc",
+                  fontSize: "0.9rem",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", minWidth: "160px" }}>
+              <label style={{ fontSize: "0.8rem", marginBottom: "4px", color: "#333" }}>
+                Special enthält
+              </label>
+              <input
+                type="text"
+                value={filterSpecial}
+                onChange={(e) => setFilterSpecial(e.target.value)}
+                style={{
+                  padding: "6px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid #ccc",
+                  fontSize: "0.9rem",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", minWidth: "160px" }}>
+              <label style={{ fontSize: "0.8rem", marginBottom: "4px", color: "#333" }}>
+                Startzeit
+              </label>
+              <input
+                type="text"
+                value={filterStartTime}
+                onChange={(e) => setFilterStartTime(e.target.value)}
+                placeholder="z.B. 10:00"
+                style={{
+                  padding: "6px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid #ccc",
+                  fontSize: "0.9rem",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", minWidth: "160px" }}>
+              <label style={{ fontSize: "0.8rem", marginBottom: "4px", color: "#333" }}>
+                Monat
+              </label>
+              <input
+                type="text"
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+                placeholder="1-12"
+                style={{
+                  padding: "6px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid #ccc",
+                  fontSize: "0.9rem",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", minWidth: "160px" }}>
+              <label style={{ fontSize: "0.8rem", marginBottom: "4px", color: "#333" }}>
+                Jahr
+              </label>
+              <input
+                type="text"
+                value={filterYear}
+                onChange={(e) => setFilterYear(e.target.value)}
+                placeholder="z.B. 2025"
+                style={{
+                  padding: "6px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid #ccc",
+                  fontSize: "0.9rem",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", minWidth: "160px" }}>
+              <label style={{ fontSize: "0.8rem", marginBottom: "4px", color: "#333" }}>
+                Quartal
+              </label>
+              <input
+                type="text"
+                value={filterQuarter}
+                onChange={(e) => setFilterQuarter(e.target.value)}
+                placeholder="1-4"
+                style={{
+                  padding: "6px 8px",
+                  borderRadius: "4px",
+                  border: "1px solid #ccc",
+                  fontSize: "0.9rem",
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Content Area */}
@@ -825,6 +918,7 @@ const ReportsDashboard: React.FC = () => {
           display: "flex",
           flexDirection: "column",
           gap: "16px",
+        width: "100%",
           minHeight: "320px",
         }}
       >
@@ -926,23 +1020,8 @@ const ReportsDashboard: React.FC = () => {
                       {summaryStats.maxVisitors.toLocaleString("de-DE")}
                     </div>
                   </div>
-                  <div
-                    style={{
-                      flex: "1 1 160px",
-                      padding: "8px 12px",
-                      borderRadius: "6px",
-                      border: "1px solid #e0e0e0",
-                      background: "#f9fafb",
-                    }}
-                  >
-                    <div style={{ fontSize: "0.75rem", color: "#666" }}>Trend (letzte 5)</div>
-                    <div style={{ fontSize: "1.1rem", fontWeight: 600 }}>
-                      {summaryStats.trendPercent !== null
-                        ? `${summaryStats.trendPercent > 0 ? "+" : ""}${summaryStats.trendPercent.toFixed(1)}%`
-                        : "–"}
-                    </div>
-                    <div style={{ fontSize: "0.7rem", color: "#999" }}>{summaryStats.trendLabel}</div>
-                  </div>
+                  
+
                 </div>
 
                 <div
@@ -968,46 +1047,8 @@ const ReportsDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div
-                    style={{
-                      flex: "2 1 240px",
-                      padding: "8px 12px",
-                      borderRadius: "6px",
-                      border: "1px solid #e0e0e0",
-                      background: "#f9fafb",
-                    }}
-                  >
-                    <div style={{ fontSize: "0.75rem", color: "#666", marginBottom: "4px" }}>
-                      Anzahl Einträge je Titel
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "0.8rem",
-                        maxHeight: "96px",
-                        overflowY: "auto",
-                      }}
-                    >
-                      {Object.entries(summaryStats.titleCounts).length === 0 ? (
-                        <div style={{ fontSize: "0.75rem", color: "#999" }}>Keine Daten</div>
-                      ) : (
-                        Object.entries(summaryStats.titleCounts)
-                          .sort((a, b) => b[1] - a[1])
-                          .map(([title, count]) => (
-                            <div
-                              key={title}
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                marginBottom: "2px",
-                              }}
-                            >
-                              <span>{title}</span>
-                              <span style={{ fontWeight: 600 }}>{count}</span>
-                            </div>
-                          ))
-                      )}
-                    </div>
-                  </div>
+                  
+
                 </div>
               </>
             )}
@@ -1089,7 +1130,7 @@ const ReportsDashboard: React.FC = () => {
             style={{
               borderRadius: "8px",
               border: "1px solid #e0e0e0",
-              background: "#fafafa",
+              background: "#ffffff",
               padding: "12px 16px 16px",
             }}
           >
@@ -1102,7 +1143,7 @@ const ReportsDashboard: React.FC = () => {
             >
               Rohdaten (Tabellarische Ansicht)
             </h3>
-            <div style={{ maxHeight: "200px", overflow: "auto" }}>
+            <div style={{ maxHeight: "600px", overflow: "auto" }}>
               <table
                 style={{
                   width: "100%",
@@ -1115,14 +1156,11 @@ const ReportsDashboard: React.FC = () => {
                     position: "sticky",
                     top: 0,
                     zIndex: 1,
-                    background: "#fafafa",
+                    background: "#ffffff",
                   }}
                 >
                   <tr>
-                    <th style={{ textAlign: "left", padding: "4px 6px", borderBottom: "1px solid #ddd" }}>
-                      ID
-                    </th>
-                    <th style={{ textAlign: "left", padding: "4px 6px", borderBottom: "1px solid #ddd" }}>
+<th style={{ textAlign: "left", padding: "4px 6px", borderBottom: "1px solid #ddd" }}>
                       Event-ID
                     </th>
                     <th
@@ -1170,31 +1208,23 @@ const ReportsDashboard: React.FC = () => {
                     <th style={{ textAlign: "left", padding: "4px 6px", borderBottom: "1px solid #ddd" }}>
                       Special
                     </th>
+                    <th style={{ textAlign: "right", padding: "4px 6px", borderBottom: "1px solid #ddd" }}>
+                      Aktionen
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {/* New manual reporting entry */}
                   <tr>
-                    <td
-                      style={{
-                        padding: "4px 6px",
-                        borderBottom: "1px solid #f0f0f0",
-                        fontSize: "0.75rem",
-                        color: "#999",
-                      }}
-                    >
-                      Neu
-                    </td>
-                    <td
-                      style={{
-                        padding: "4px 6px",
-                        borderBottom: "1px solid #f0f0f0",
-                        fontSize: "0.75rem",
-                        color: "#999",
-                      }}
-                    >
-                      99
-                    </td>
+                    <td style={{ padding: "4px 6px", borderBottom: "1px solid #f0f0f0" }}>
+                    <input
+                      type="text"
+                      value={newEventId}
+                      onChange={(e) => setNewEventId(e.target.value)}
+                      placeholder="Event-ID (optional)"
+                      style={{ width: "100%", fontSize: "0.75rem" }}
+                    />
+                  </td>
                     <td style={{ padding: "4px 6px", borderBottom: "1px solid #f0f0f0" }}>
                       <input
                         type="date"
@@ -1284,7 +1314,9 @@ const ReportsDashboard: React.FC = () => {
                           cursor: creating ? "wait" : "pointer",
                         }}
                       >
-                        {creating ? "Speichern..." : "Neu anlegen"}
+                        <span title="Neu anlegen" aria-hidden="true" style={{ display: "inline-flex" }}>
+                          <IconPlus />
+                        </span>
                       </button>
                     </td>
                   </tr>
@@ -1297,10 +1329,7 @@ const ReportsDashboard: React.FC = () => {
 
                     return (
                       <tr key={`${row.date}-${row.title}-${idx}`}>
-                        <td style={{ padding: "4px 6px", borderBottom: "1px solid #f0f0f0" }}>
-                          {current.id ?? ""}
-                        </td>
-                        <td style={{ padding: "4px 6px", borderBottom: "1px solid #f0f0f0" }}>
+<td style={{ padding: "4px 6px", borderBottom: "1px solid #f0f0f0" }}>
                           {current.event_id ?? ""}
                         </td>
                         <td style={{ padding: "4px 6px", borderBottom: "1px solid #f0f0f0" }}>
@@ -1414,7 +1443,7 @@ const ReportsDashboard: React.FC = () => {
                                 disabled={savingId === current.id}
                                 style={{
                                   fontSize: "0.75rem",
-                                  padding: "2px 6px",
+                                  padding: "4px 6px",
                                   marginRight: "4px",
                                   borderRadius: "4px",
                                   border: "1px solid #1976d2",
@@ -1429,7 +1458,7 @@ const ReportsDashboard: React.FC = () => {
                                 onClick={cancelEditRow}
                                 style={{
                                   fontSize: "0.75rem",
-                                  padding: "2px 6px",
+                                  padding: "4px 6px",
                                   borderRadius: "4px",
                                   border: "1px solid #9e9e9e",
                                   background: "#fafafa",
@@ -1446,7 +1475,7 @@ const ReportsDashboard: React.FC = () => {
                                 onClick={() => startEditRow(row)}
                                 style={{
                                   fontSize: "0.75rem",
-                                  padding: "2px 6px",
+                                  padding: "4px 6px",
                                   marginRight: "4px",
                                   borderRadius: "4px",
                                   border: "1px solid #1976d2",
@@ -1454,7 +1483,9 @@ const ReportsDashboard: React.FC = () => {
                                   cursor: "pointer",
                                 }}
                               >
-                                Bearbeiten
+                                <span title="Bearbeiten" aria-hidden="true" style={{ display: "inline-flex" }}>
+                                  <IconEdit />
+                                </span>
                               </button>
                               <button
                                 type="button"
@@ -1462,14 +1493,16 @@ const ReportsDashboard: React.FC = () => {
                                 disabled={deletingId === current.id}
                                 style={{
                                   fontSize: "0.75rem",
-                                  padding: "2px 6px",
+                                  padding: "4px 6px",
                                   borderRadius: "4px",
                                   border: "1px solid #d32f2f",
                                   background: "#ffebee",
                                   cursor: deletingId === current.id ? "wait" : "pointer",
                                 }}
                               >
-                                Löschen
+                                <span title="Löschen" aria-hidden="true" style={{ display: "inline-flex" }}>
+                                  <IconTrash />
+                                </span>
                               </button>
                             </>
                           )}
