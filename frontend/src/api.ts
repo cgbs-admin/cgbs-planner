@@ -7,6 +7,8 @@ const API_BASE_URL =
 
 let authToken: string | null = null;
 
+export const AUTH_LOGOUT_EVENT = "auth:logout";
+
 export function loadAuthTokenFromStorage() {
   try {
     const stored = window.localStorage.getItem("authToken");
@@ -18,6 +20,14 @@ export function loadAuthTokenFromStorage() {
 
 export function setAuthToken(token: string | null) {
   authToken = token;
+
+
+  // Notify the app about auth changes (e.g., to redirect to Login)
+  try {
+    window.dispatchEvent(new CustomEvent(AUTH_LOGOUT_EVENT, { detail: { token } }));
+  } catch {
+    // ignore
+  }
 
   try {
     if (token) {
@@ -56,5 +66,17 @@ export async function apiFetch(
     headers.set("Authorization", `Bearer ${authToken}`);
   }
 
-  return fetch(url, { ...init, headers });
+  const response = await fetch(url, { ...init, headers });
+
+  if (response.status === 401) {
+    // Token is invalid/expired. Clear it so the UI can redirect to Login.
+    setAuthToken(null);
+    try {
+      window.dispatchEvent(new CustomEvent(AUTH_LOGOUT_EVENT, { detail: { reason: "unauthorized" } }));
+    } catch {
+      // ignore
+    }
+  }
+
+  return response;
 }

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import CreateEventWizard from "./CreateEventWizard";
+import { apiFetch, AUTH_LOGOUT_EVENT, getAuthToken, setAuthToken } from "../api";
 
 type ActiveView = "events" | "categories" | "planningLevels" | "reports" | "mobileVisitors" | "predigtplanung";
 
@@ -46,6 +47,95 @@ const AppLayout: React.FC<AppLayoutProps> = ({
   });
 
   const [hoveredNav, setHoveredNav] = useState<ActiveView | null>(null);
+
+
+  // --- Session handling (centralized in AppLayout) ---
+  // - Auto-logout on inactivity (default 30 minutes)
+  // - When tab becomes active again, attempt a lightweight auth check
+  // - React to global 401 logout events emitted from apiFetch
+  const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+
+  useEffect(() => {
+    if (!onLogout) return;
+
+    let idleTimer: number | null = null;
+
+    const schedule = () => {
+      if (idleTimer) window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => {
+        if (getAuthToken()) {
+          setAuthToken(null);
+          onLogout();
+        }
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const onActivity = () => schedule();
+
+    schedule();
+    const events: Array<keyof WindowEventMap> = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
+    events.forEach((ev) => window.addEventListener(ev, onActivity, { passive: true }));
+
+    return () => {
+      if (idleTimer) window.clearTimeout(idleTimer);
+      events.forEach((ev) => window.removeEventListener(ev, onActivity as any));
+    };
+  }, [onLogout]);
+
+  useEffect(() => {
+    if (!onLogout) return;
+
+    const onAuthLogoutEvent = (e: Event) => {
+      const ce = e as CustomEvent;
+      const reason = (ce.detail?.reason as string | undefined) || "";
+      const token = (ce.detail?.token as string | null | undefined) ?? undefined;
+
+      if (reason === "unauthorized" || token === null || !getAuthToken()) {
+        onLogout();
+      }
+    };
+
+    window.addEventListener(AUTH_LOGOUT_EVENT, onAuthLogoutEvent as EventListener);
+
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key === "authToken" && !ev.newValue) {
+        onLogout();
+      }
+    };
+    window.addEventListener("storage", onStorage);
+
+    return () => {
+      window.removeEventListener(AUTH_LOGOUT_EVENT, onAuthLogoutEvent as EventListener);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [onLogout]);
+
+  useEffect(() => {
+    if (!onLogout) return;
+
+    const checkOnReturn = async () => {
+      if (document.visibilityState === "hidden") return;
+      if (!getAuthToken()) return;
+
+      try {
+        const res = await apiFetch("/events", { method: "GET" });
+        if (res.status === 401) {
+          onLogout();
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    window.addEventListener("focus", checkOnReturn);
+    document.addEventListener("visibilitychange", checkOnReturn);
+
+    return () => {
+      window.removeEventListener("focus", checkOnReturn);
+      document.removeEventListener("visibilitychange", checkOnReturn);
+    };
+  }, [onLogout]);
+  // --- End session handling ---
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
