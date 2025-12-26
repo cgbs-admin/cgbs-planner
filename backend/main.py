@@ -94,6 +94,14 @@ async def get_current_admin(
         )
     return current_user
 
+def get_current_welcome(current_user: User = Depends(get_current_user)):
+    if current_user.role not in ("welcome", "admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Not enough permissions"
+        )
+    return current_user
+
 
 # Allow browser apps (like our React frontend) to call the API
 app.add_middleware(
@@ -1521,7 +1529,7 @@ def create_user(
     if not username:
         raise HTTPException(status_code=400, detail="Username is required")
 
-    if payload.role not in ("admin", "viewer"):
+    if payload.role not in ("admin", "viewer", "welcome"):
         raise HTTPException(status_code=400, detail="Invalid role (must be admin or viewer)")
 
     if not payload.password or len(payload.password) < 6:

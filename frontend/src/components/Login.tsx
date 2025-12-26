@@ -85,7 +85,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   };
 
   const focusedStyle: React.CSSProperties = {
-    borderColor: brand.brand,
+    border: `1px solid ${brand.brand}`,
     boxShadow: `0 0 0 3px ${brand.ring}, 0 1px 3px rgba(15, 23, 42, 0.08)`,
   };
 

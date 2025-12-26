@@ -186,7 +186,7 @@ const loadSavedVisitorsFromReporting = useCallback(
     try {
       setLoading(true);
       setError(null);
-      const res = await apiFetch("/events");
+      const res = await apiFetch("/mobile-visitors/events");
       if (!res.ok) {
         throw new Error(`Failed to load events: ${res.status}`);
       }

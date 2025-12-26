@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import CreateEventWizard from "./CreateEventWizard";
+import UsersPage from "./UsersPage";
 import { apiFetch, AUTH_LOGOUT_EVENT, getAuthToken, setAuthToken } from "../api";
 
-type ActiveView = "events" | "categories" | "planningLevels" | "reports" | "mobileVisitors" | "predigtplanung";
+type ActiveView = "events" | "categories" | "planningLevels" | "reports" | "mobileVisitors" | "predigtplanung" | "users";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -15,16 +16,30 @@ interface AppLayoutProps {
 }
 
 
-const getUsernameFromToken = (token: string | null): string | null => {
+const getJwtPayload = (token: string | null): any | null => {
   if (!token) return null;
   try {
-    const parts = token.split(".");
+    const raw = token.startsWith("Bearer ") ? token.slice(7) : token;
+    const parts = raw.split(".");
     if (parts.length < 2) return null;
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-    return typeof payload?.sub === "string" ? payload.sub : null;
+
+    // JWT is base64url encoded; atob expects standard base64.
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64 + "===".slice((base64.length + 3) % 4);
+    return JSON.parse(atob(padded));
   } catch {
     return null;
   }
+};
+
+const getUsernameFromToken = (token: string | null): string | null => {
+  const payload = getJwtPayload(token);
+  return typeof payload?.sub === "string" ? payload.sub : null;
+};
+
+const getRoleFromToken = (token: string | null): string | null => {
+  const payload = getJwtPayload(token);
+  return typeof payload?.role === "string" ? payload.role : null;
 };
 
 
@@ -63,58 +78,51 @@ const AppLayout: React.FC<AppLayoutProps> = ({
   const [hoveredNav, setHoveredNav] = useState<ActiveView | null>(null);
 
 
-// --- Admin detection (robust): verify via backend (admin-only endpoint) ---
-const [isAdmin, setIsAdmin] = useState<boolean>(false);
-const [adminChecked, setAdminChecked] = useState<boolean>(false);
+// --- Admin detection (no network calls): derived from JWT role ---
+const [authTokenValue, setAuthTokenValue] = useState<string | null>(() => getAuthToken());
 
 useEffect(() => {
-  let cancelled = false;
+  // Keep token state in sync (same tab + other tabs)
+  let last = getAuthToken();
+  setAuthTokenValue(last);
 
-  const checkAdmin = async () => {
-    const token = getAuthToken();
-    if (!token) {
-      if (!cancelled) {
-        setIsAdmin(false);
-        setAdminChecked(true);
-      }
-      return;
-    }
-
-    try {
-      const res = await apiFetch("/users", { method: "GET" });
-      if (cancelled) return;
-
-      if (res.status === 200) {
-        setIsAdmin(true);
-      } else {
-        // 401 will be handled by apiFetch; 403 means non-admin
-        setIsAdmin(false);
-      }
-      setAdminChecked(true);
-    } catch {
-      if (!cancelled) {
-        setIsAdmin(false);
-        setAdminChecked(true);
-      }
+  const onStorage = (ev: StorageEvent) => {
+    if (ev.key === "authToken") {
+      last = ev.newValue;
+      setAuthTokenValue(ev.newValue);
     }
   };
+  window.addEventListener("storage", onStorage);
 
-  // Run immediately and also when tab is focused again
-  checkAdmin();
-
-  const onFocus = () => checkAdmin();
-  window.addEventListener("focus", onFocus);
-  document.addEventListener("visibilitychange", onFocus);
+  // Fallback for same-tab updates (storage does not fire in same tab)
+  const id = window.setInterval(() => {
+    const t = getAuthToken();
+    if (t !== last) {
+      last = t;
+      setAuthTokenValue(t);
+    }
+  }, 1000);
 
   return () => {
-    cancelled = true;
-    window.removeEventListener("focus", onFocus);
-    document.removeEventListener("visibilitychange", onFocus);
+    window.removeEventListener("storage", onStorage);
+    window.clearInterval(id);
   };
 }, []);
+
+const currentRole = useMemo(() => getRoleFromToken(authTokenValue), [authTokenValue]);
+const isAdmin = currentRole === "admin";
+const isWelcome = currentRole === "welcome";
+const adminChecked = true;
+
+// Force welcome users into the Mobile Visitors view only
+useEffect(() => {
+  if (isWelcome && activeView !== "mobileVisitors") {
+    onChangeView("mobileVisitors");
+  }
+}, [isWelcome, activeView, onChangeView]);
 // --- End admin detection ---
 
-const [showUsersPlaceholder, setShowUsersPlaceholder] = useState(false);
+
 
 
   // --- Session handling (centralized in AppLayout) ---
@@ -219,9 +227,11 @@ const [showUsersPlaceholder, setShowUsersPlaceholder] = useState(false);
     }
     setShowCreateWizard(false);
   };
+  const effectiveActiveView: ActiveView = isWelcome ? "mobileVisitors" : activeView;
+
 
   const viewTitle = useMemo(() => {
-    switch (activeView) {
+    switch (effectiveActiveView) {
       case "events":
         return "Events";
       case "categories":
@@ -234,13 +244,15 @@ const [showUsersPlaceholder, setShowUsersPlaceholder] = useState(false);
         return "Besucherzahl erfassen";
       case "predigtplanung":
         return "Predigtplanung";
+      case "users":
+        return "Users";
       default:
         return "Navigation";
     }
-  }, [activeView]);
+  }, [effectiveActiveView]);
 
 
-  const showMobileFab = isMobile && activeView === "events";
+  const showMobileFab = isMobile && effectiveActiveView === "events" && !isWelcome;
 
   // Prevent background scroll when mobile nav or wizard is open
   useEffect(() => {
@@ -264,17 +276,28 @@ const [showUsersPlaceholder, setShowUsersPlaceholder] = useState(false);
     setMobileNavOpen(false);
   };
 
-  const navItems: Array<{ view: ActiveView; label: string; icon: string; color: string }> = [
+  const effectiveChangeView = (view: ActiveView) => {
+    if (isWelcome) {
+      // welcome users are restricted to Mobile Visitors only
+      handleChangeView("mobileVisitors");
+      return;
+    }
+    handleChangeView(view);
+  };
+
+  const baseNavItems: Array<{ view: ActiveView; label: string; icon: string; color: string }> = [
     { view: "events", label: "Events", icon: "📅", color: "#e0e7ff" },
-    { view: "categories", label: "Kategorien", icon: "🏷️", color: "#fce7f3" },
-    { view: "planningLevels", label: "Planungslevel", icon: "🧩", color: "#dcfce7" },
     { view: "predigtplanung", label: "Predigtplanung", icon: "🎙️", color: "#ede9fe" },
     { view: "reports", label: "Besucherstatistik", icon: "📊", color: "#e0f2fe" },
     { view: "mobileVisitors", label: "Besucherzahl erfassen", icon: "👥", color: "#fff7ed" },
   ];
 
+  const navItems: Array<{ view: ActiveView; label: string; icon: string; color: string }> = isWelcome
+    ? baseNavItems.filter((i) => i.view === "mobileVisitors")
+    : baseNavItems;
+
   const makeNavButtonStyle = (view: ActiveView): React.CSSProperties => {
-    const isSelected = activeView === view;
+    const isSelected = effectiveActiveView === view;
     const isHovered = hoveredNav === view;
 
     return {
@@ -490,8 +513,8 @@ const [showUsersPlaceholder, setShowUsersPlaceholder] = useState(false);
               style={makeNavButtonStyle(item.view)}
               onMouseEnter={() => setHoveredNav(item.view)}
               onMouseLeave={() => setHoveredNav(null)}
-              onClick={() => handleChangeView(item.view)}
-              aria-current={activeView === item.view ? "page" : undefined}
+              onClick={() => effectiveChangeView(item.view)}
+              aria-current={effectiveActiveView === item.view ? "page" : undefined}
             >
               <span style={makeBadgeStyle(item.color)}>{item.icon}</span>
               <div style={{ minWidth: 0 }}>
@@ -510,68 +533,117 @@ const [showUsersPlaceholder, setShowUsersPlaceholder] = useState(false);
             </button>
           ))}
         
+
 {adminChecked && isAdmin && (
   <div style={{ marginTop: 14 }}>
     <div style={sectionLabelStyle}>Admin</div>
-    <button
-      type="button"
-      style={{
-        ...makeNavButtonStyle(activeView),
-        border: "1px solid #e5e7eb",
-        backgroundColor: "#ffffff",
-      }}
-      onClick={() => {
-        setMobileNavOpen(false);
-        setShowUsersPlaceholder(true);
-      }}
-    >
-      <span style={makeBadgeStyle("#f1f5f9")}>👤</span>
-      <div style={{ minWidth: 0 }}>
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 500,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          Users
-        </div>
-      </div>
-    </button>
-  </div>
-)}
 
-</div>
-
-        <div style={{ marginTop: 14 }}>
-          <button
-            type="button"
-            style={primaryButtonStyle}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
-              (e.currentTarget as HTMLButtonElement).style.opacity = "0.98";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0px)";
-              (e.currentTarget as HTMLButtonElement).style.opacity = "1";
-            }}
-            onClick={() => {
-              setMobileNavOpen(false);
-              setShowCreateWizard(true);
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <button
+        type="button"
+        style={makeNavButtonStyle("categories")}
+        onMouseEnter={() => setHoveredNav("categories")}
+        onMouseLeave={() => setHoveredNav(null)}
+        onClick={() => effectiveChangeView("categories")}
+        aria-current={activeView === "categories" ? "page" : undefined}
+      >
+        <span style={makeBadgeStyle("#fce7f3")}>🏷️</span>
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 500,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
             }}
           >
-            + Event erstellen
-          </button>
+            Kategorien
+          </div>
         </div>
+      </button>
+
+      <button
+        type="button"
+        style={makeNavButtonStyle("planningLevels")}
+        onMouseEnter={() => setHoveredNav("planningLevels")}
+        onMouseLeave={() => setHoveredNav(null)}
+        onClick={() => effectiveChangeView("planningLevels")}
+        aria-current={activeView === "planningLevels" ? "page" : undefined}
+      >
+        <span style={makeBadgeStyle("#dcfce7")}>🧩</span>
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 500,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Planungslevel
+          </div>
+        </div>
+      </button>
+
+      <button
+        type="button"
+        style={makeNavButtonStyle("users")}
+        onMouseEnter={() => setHoveredNav("users")}
+        onMouseLeave={() => setHoveredNav(null)}
+        onClick={() => effectiveChangeView("users")}
+        aria-current={effectiveActiveView === "users" ? "page" : undefined}
+      >
+        <span style={makeBadgeStyle("#f1f5f9")}>👤</span>
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 500,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Users
+          </div>
+        </div>
+      </button>
+    </div>
+  </div>
+)}
+</div>
+
+        {isAdmin && (
+          <div style={{ marginTop: 14 }}>
+            <button
+              type="button"
+              style={primaryButtonStyle}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+                (e.currentTarget as HTMLButtonElement).style.opacity = "0.98";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0px)";
+                (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+              }}
+              onClick={() => {
+                setMobileNavOpen(false);
+                setShowCreateWizard(true);
+              }}
+            >
+              + Event erstellen
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 
   const SidebarFooter = (
     <div style={footerStyle}>
-      <span>Angemeldet als {getUsernameFromToken(getAuthToken()) ?? "–"}</span>
+      <span>Angemeldet als {getUsernameFromToken(authTokenValue) ?? "–"}</span>
       {onLogout && (
         <button
           type="button"
@@ -684,12 +756,12 @@ const [showUsersPlaceholder, setShowUsersPlaceholder] = useState(false);
         </header>
 
         <main style={mainStyle}>
-          <div style={mainInnerStyle}>{children}</div>
+          <div style={mainInnerStyle}>{activeView === "users" ? <UsersPage /> : children}</div>
         </main>
       </div>
 
       {/* Mobile FAB: create event */}
-      {showMobileFab && (
+      {isAdmin && showMobileFab && (
         <button
                 type="button"
                 aria-label="Event erstellen"
@@ -702,53 +774,6 @@ const [showUsersPlaceholder, setShowUsersPlaceholder] = useState(false);
                 +
               </button>
       )}
-
-      
-{/* Users (Admin) Placeholder Modal */}
-{showUsersPlaceholder && (
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      zIndex: 70,
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 12,
-      backgroundColor: "rgba(2, 6, 23, 0.45)",
-    }}
-    onClick={() => setShowUsersPlaceholder(false)}
-  >
-    <div
-      style={{
-        width: "100%",
-        maxWidth: 640,
-        borderRadius: 22,
-        backgroundColor: "#ffffff",
-        boxShadow: "0 26px 70px rgba(15, 23, 42, 0.18)",
-        border: "1px solid rgba(15, 23, 42, 0.08)",
-        padding: 18,
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <div style={{ fontSize: 16, fontWeight: 600 }}>Users</div>
-        <button
-          type="button"
-          style={roundIconButtonStyle}
-          onClick={() => setShowUsersPlaceholder(false)}
-          aria-label="Close"
-        >
-          ✕
-        </button>
-      </div>
-      <div style={{ marginTop: 10, color: colors.muted, fontSize: 13, lineHeight: 1.5 }}>
-        This is the placeholder for the User Management UI. Next step: we will build the full screen here
-        (list users, create user, set role, deactivate).
-      </div>
-    </div>
-  </div>
-)}
 
 {/* Create Event Wizard Modal */}
       {showCreateWizard && (
