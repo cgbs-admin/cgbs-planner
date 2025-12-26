@@ -94,13 +94,17 @@ async def get_current_admin(
         )
     return current_user
 
-def get_current_welcome(current_user: User = Depends(get_current_user)):
+async def get_current_welcome(
+    current_user: models.User = Depends(get_current_user),
+) -> models.User:
+    # welcome users are allowed on Mobile Visitors endpoints; admins also pass.
     if current_user.role not in ("welcome", "admin"):
         raise HTTPException(
             status_code=403,
-            detail="Not enough permissions"
+            detail="Insufficient permissions",
         )
     return current_user
+
 
 
 # Allow browser apps (like our React frontend) to call the API
@@ -193,6 +197,20 @@ def list_events(db: Session = Depends(get_db),
     ):
     """
     Return all events (simple flat list for now).
+    """
+    events = db.query(models.Event).order_by(models.Event.start_date, models.Event.start_time).all()
+    return events
+
+
+@app.get("/mobile-visitors/events", response_model=List[schemas.EventRead])
+def list_events_for_mobile_visitors(
+    db: Session = Depends(get_db),
+    current_welcome: models.User = Depends(get_current_welcome),
+):
+    """Return events for the Mobile Visitors view.
+
+    Access:
+    - welcome users (and admins) only.
     """
     events = db.query(models.Event).order_by(models.Event.start_date, models.Event.start_time).all()
     return events
@@ -1158,7 +1176,7 @@ def delete_planning_level(planning_level_id: int, db: Session = Depends(get_db))
 def create_reporting_entry(
     reporting_in: schemas.ReportingCreate,
     db: Session = Depends(get_db),
-    current_admin: models.User = Depends(get_current_admin),
+    current_welcome: models.User = Depends(get_current_welcome),
 ):
     """
     Create or update a reporting entry for a given event.
@@ -1530,7 +1548,7 @@ def create_user(
         raise HTTPException(status_code=400, detail="Username is required")
 
     if payload.role not in ("admin", "viewer", "welcome"):
-        raise HTTPException(status_code=400, detail="Invalid role (must be admin or viewer)")
+        raise HTTPException(status_code=400, detail="Invalid role (must be admin, viewer or welcome)")
 
     if not payload.password or len(payload.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
@@ -1567,8 +1585,8 @@ def update_user(
         raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
 
     if payload.role is not None:
-        if payload.role not in ("admin", "viewer"):
-            raise HTTPException(status_code=400, detail="Invalid role (must be admin or viewer)")
+        if payload.role not in ("admin", "viewer", "welcome"):
+            raise HTTPException(status_code=400, detail="Invalid role (must be admin, viewer or welcome)")
         user.role = payload.role
 
     if payload.is_active is not None:
