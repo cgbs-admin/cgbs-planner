@@ -13,6 +13,7 @@ import AppLayout from "./components/AppLayout";
 import ReportsDashboard from "./components/ReportsDashboard";
 import MobileVisitorsPage from "./components/MobileVisitorsPage";
 import Predigtplanung from "./components/Predigtplanung";
+import UsersPage from "./components/UsersPage";
 
 type Category = {
   id: number;
@@ -60,7 +61,7 @@ type UiEvent = Event & {
   __base?: Event;
 };
 
-type ActiveView = "events" | "categories" | "planningLevels" | "reports" | "mobileVisitors" | "predigtplanung";
+type ActiveView = "events" | "categories" | "planningLevels" | "reports" | "mobileVisitors" | "predigtplanung" | "users";
 type FormMode = "create" | "edit" | "duplicate";
 
 const App: React.FC = () => {
@@ -1843,7 +1844,7 @@ const isKollekte =
   return (
     <AppLayout
       activeView={activeView}
-      onChangeView={setActiveView}
+      onChangeView={(view) => setActiveView(view)}
       onLogout={handleLogout}
       onCreateEvent={handleCreateEventFromNav}  
   >
@@ -2075,6 +2076,8 @@ const isKollekte =
       {activeView === "reports" && <ReportsDashboard />}
 
       {activeView === "mobileVisitors" && <MobileVisitorsPage />}
+
+      {activeView === "users" && <UsersPage />}
 
       {activeView === "predigtplanung" && <Predigtplanung />}
     </AppLayout>
