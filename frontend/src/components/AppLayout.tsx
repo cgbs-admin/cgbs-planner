@@ -14,6 +14,20 @@ interface AppLayoutProps {
   onCreateEvent?: () => void;
 }
 
+
+const getUsernameFromToken = (token: string | null): string | null => {
+  if (!token) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload?.sub === "string" ? payload.sub : null;
+  } catch {
+    return null;
+  }
+};
+
+
 const AppLayout: React.FC<AppLayoutProps> = ({
   children,
   activeView,
@@ -47,6 +61,60 @@ const AppLayout: React.FC<AppLayoutProps> = ({
   });
 
   const [hoveredNav, setHoveredNav] = useState<ActiveView | null>(null);
+
+
+// --- Admin detection (robust): verify via backend (admin-only endpoint) ---
+const [isAdmin, setIsAdmin] = useState<boolean>(false);
+const [adminChecked, setAdminChecked] = useState<boolean>(false);
+
+useEffect(() => {
+  let cancelled = false;
+
+  const checkAdmin = async () => {
+    const token = getAuthToken();
+    if (!token) {
+      if (!cancelled) {
+        setIsAdmin(false);
+        setAdminChecked(true);
+      }
+      return;
+    }
+
+    try {
+      const res = await apiFetch("/users", { method: "GET" });
+      if (cancelled) return;
+
+      if (res.status === 200) {
+        setIsAdmin(true);
+      } else {
+        // 401 will be handled by apiFetch; 403 means non-admin
+        setIsAdmin(false);
+      }
+      setAdminChecked(true);
+    } catch {
+      if (!cancelled) {
+        setIsAdmin(false);
+        setAdminChecked(true);
+      }
+    }
+  };
+
+  // Run immediately and also when tab is focused again
+  checkAdmin();
+
+  const onFocus = () => checkAdmin();
+  window.addEventListener("focus", onFocus);
+  document.addEventListener("visibilitychange", onFocus);
+
+  return () => {
+    cancelled = true;
+    window.removeEventListener("focus", onFocus);
+    document.removeEventListener("visibilitychange", onFocus);
+  };
+}, []);
+// --- End admin detection ---
+
+const [showUsersPlaceholder, setShowUsersPlaceholder] = useState(false);
 
 
   // --- Session handling (centralized in AppLayout) ---
@@ -441,7 +509,41 @@ const AppLayout: React.FC<AppLayoutProps> = ({
               </div>
             </button>
           ))}
+        
+{adminChecked && isAdmin && (
+  <div style={{ marginTop: 14 }}>
+    <div style={sectionLabelStyle}>Admin</div>
+    <button
+      type="button"
+      style={{
+        ...makeNavButtonStyle(activeView),
+        border: "1px solid #e5e7eb",
+        backgroundColor: "#ffffff",
+      }}
+      onClick={() => {
+        setMobileNavOpen(false);
+        setShowUsersPlaceholder(true);
+      }}
+    >
+      <span style={makeBadgeStyle("#f1f5f9")}>👤</span>
+      <div style={{ minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 500,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Users
         </div>
+      </div>
+    </button>
+  </div>
+)}
+
+</div>
 
         <div style={{ marginTop: 14 }}>
           <button
@@ -469,7 +571,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
 
   const SidebarFooter = (
     <div style={footerStyle}>
-      <span>Signed in</span>
+      <span>Angemeldet als {getUsernameFromToken(getAuthToken()) ?? "–"}</span>
       {onLogout && (
         <button
           type="button"
@@ -601,7 +703,54 @@ const AppLayout: React.FC<AppLayoutProps> = ({
               </button>
       )}
 
-      {/* Create Event Wizard Modal */}
+      
+{/* Users (Admin) Placeholder Modal */}
+{showUsersPlaceholder && (
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      zIndex: 70,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 12,
+      backgroundColor: "rgba(2, 6, 23, 0.45)",
+    }}
+    onClick={() => setShowUsersPlaceholder(false)}
+  >
+    <div
+      style={{
+        width: "100%",
+        maxWidth: 640,
+        borderRadius: 22,
+        backgroundColor: "#ffffff",
+        boxShadow: "0 26px 70px rgba(15, 23, 42, 0.18)",
+        border: "1px solid rgba(15, 23, 42, 0.08)",
+        padding: 18,
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ fontSize: 16, fontWeight: 600 }}>Users</div>
+        <button
+          type="button"
+          style={roundIconButtonStyle}
+          onClick={() => setShowUsersPlaceholder(false)}
+          aria-label="Close"
+        >
+          ✕
+        </button>
+      </div>
+      <div style={{ marginTop: 10, color: colors.muted, fontSize: 13, lineHeight: 1.5 }}>
+        This is the placeholder for the User Management UI. Next step: we will build the full screen here
+        (list users, create user, set role, deactivate).
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Create Event Wizard Modal */}
       {showCreateWizard && (
         <div
           style={{

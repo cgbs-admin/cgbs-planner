@@ -2,7 +2,7 @@
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.DEV ? "http://localhost:8000" : "/api");
+  (import.meta.env.DEV ? "http://localhost:8001" : "/api");
 
 
 let authToken: string | null = null;
@@ -21,14 +21,10 @@ export function loadAuthTokenFromStorage() {
 export function setAuthToken(token: string | null) {
   authToken = token;
 
-
-  // Notify the app about auth changes (e.g., to redirect to Login)
-  try {
-    window.dispatchEvent(new CustomEvent(AUTH_LOGOUT_EVENT, { detail: { token } }));
-  } catch {
-    // ignore
-  }
-
+  // IMPORTANT:
+  // Do NOT dispatch AUTH_LOGOUT_EVENT from here.
+  // AUTH_LOGOUT_EVENT is reserved for 401/Unauthorized flows inside apiFetch.
+  // Dispatching from setAuthToken (especially on manual logout) can create infinite recursion.
   try {
     if (token) {
       window.localStorage.setItem("authToken", token);

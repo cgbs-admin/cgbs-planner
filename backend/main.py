@@ -1476,4 +1476,104 @@ def report_visitors_by_title(
         )
 
     return results
+# -----------------------------
+# USER MANAGEMENT (Admin only)
+# -----------------------------
+
+class UserRead(BaseModel):
+    id: int
+    username: str
+    role: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    role: str = "viewer"   # "admin" or "viewer"
+    is_active: bool = True
+
+
+class UserUpdate(BaseModel):
+    password: str | None = None
+    role: str | None = None
+    is_active: bool | None = None
+
+
+@app.get("/users", response_model=List[UserRead])
+def list_users(
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(get_current_admin),
+):
+    return db.query(models.User).order_by(models.User.id).all()
+
+
+@app.post("/users", response_model=UserRead)
+def create_user(
+    payload: UserCreate,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(get_current_admin),
+):
+    username = (payload.username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="Username is required")
+
+    if payload.role not in ("admin", "viewer"):
+        raise HTTPException(status_code=400, detail="Invalid role (must be admin or viewer)")
+
+    if not payload.password or len(payload.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    existing = db.query(models.User).filter(models.User.username == username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    user = models.User(
+        username=username,
+        password_hash=get_password_hash(payload.password),
+        role=payload.role,
+        is_active=payload.is_active,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.put("/users/{user_id}", response_model=UserRead)
+def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(get_current_admin),
+):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Prevent accidentally deactivating your own currently logged-in account
+    if user.id == current_admin.id and payload.is_active is False:
+        raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
+
+    if payload.role is not None:
+        if payload.role not in ("admin", "viewer"):
+            raise HTTPException(status_code=400, detail="Invalid role (must be admin or viewer)")
+        user.role = payload.role
+
+    if payload.is_active is not None:
+        user.is_active = payload.is_active
+
+    if payload.password is not None:
+        if len(payload.password) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        user.password_hash = get_password_hash(payload.password)
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
 
