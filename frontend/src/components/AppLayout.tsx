@@ -756,7 +756,7 @@ useEffect(() => {
         </header>
 
         <main style={mainStyle}>
-          <div style={mainInnerStyle}>{activeView === "users" ? <UsersPage /> : children}</div>
+          <div style={mainInnerStyle}>{effectiveActiveView === "users" ? <UsersPage /> : children}</div>
         </main>
       </div>
 
