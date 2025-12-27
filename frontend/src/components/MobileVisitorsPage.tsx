@@ -52,16 +52,8 @@ function formatMonthLabel(dateString?: string | null): string {
   });
 }
 
-function formatDateSeparatorLabel(dateString?: string | null): string {
-  if (!dateString) return "";
-  const dt = new Date(dateString);
-  if (Number.isNaN(dt.getTime())) return dateString ?? "";
-  return dt.toLocaleDateString(undefined, {
-    weekday: "long",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+function formatDateSeparatorLabel(): string {
+  return "";
 }
 
 function parseYmd(dateString?: string | null): Date | null {
@@ -339,15 +331,28 @@ const MobileVisitorsPage: React.FC = () => {
         return a.id - b.id;
       });
 
+      // Show only events for today. If there are no events today, show all events of the
+      // nearest future date that has events.
+      const todaysEvents = onlyFutureGottesdienste.filter((ev) => ev.start_date === todayStr);
+
+      let visibleEvents: MobileEvent[] = todaysEvents;
+
+      if (todaysEvents.length === 0) {
+        const nextDate = onlyFutureGottesdienste.find((ev) => (ev.start_date ?? "") > todayStr)?.start_date ?? null;
+        visibleEvents = nextDate
+          ? onlyFutureGottesdienste.filter((ev) => ev.start_date === nextDate)
+          : [];
+      }
+
       setAllEvents(data);
-      setEvents(onlyFutureGottesdienste);
+      setEvents(visibleEvents);
 
       // Input must always be blank on refresh.
       setVisitorsInput({});
       setEditingFor({});
       setDeleteConfirmFor(null);
 
-      const { counts, ids } = await loadSavedVisitorsFromReporting(onlyFutureGottesdienste);
+      const { counts, ids } = await loadSavedVisitorsFromReporting(visibleEvents);
 
       // IMPORTANT:
       // The label "Aktuell gespeicherte Besucherzahl" must reflect ONLY what exists in the reporting DB.
@@ -673,6 +678,16 @@ const MobileVisitorsPage: React.FC = () => {
 
   const hasEvents = useMemo(() => events.length > 0, [events]);
 
+  const dayTotalEvents = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const ev of events) {
+      const dateKey = ev.start_date ?? "";
+      if (!dateKey) continue;
+      map[dateKey] = (map[dateKey] ?? 0) + 1;
+    }
+    return map;
+  }, [events]);
+
   const dayVisitorSummary = useMemo(() => {
     const map: Record<string, { total: number; count: number }> = {};
     for (const ev of events) {
@@ -686,66 +701,40 @@ const MobileVisitorsPage: React.FC = () => {
     }
     return map;
   }, [events, savedVisitors]);
-
-
-  let lastMonthKey = "";
   let lastDateKey = "";
 
   const groupedList = events.map((ev) => {
     const dateKey = ev.start_date ?? "";
-    const monthKey = dateKey.substring(0, 7);
 
     const separators: React.ReactElement[] = [];
 
-    if (monthKey && monthKey !== lastMonthKey) {
-      separators.push(
-        <div
-          key={`month-${monthKey}`}
-          className={`${lastMonthKey === "" ? "mt-1" : "mt-6"} mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500 col-span-full`}
-        >
-          <div className="h-px flex-1 bg-slate-300" />
-          <div>{formatMonthLabel(ev.start_date)}</div>
-          <div className="h-px flex-1 bg-slate-300" />
-        </div>
-      );
-      lastMonthKey = monthKey;
-      lastDateKey = "";
-    }
-
     if (dateKey && dateKey !== lastDateKey) {
-      separators.push(
-        <div
-          key={`date-${dateKey}`}
-          className="mt-3 pl-1 text-[11px] font-medium text-slate-600 col-span-full"
-        >
-          {formatDateSeparatorLabel(ev.start_date)}
-        </div>
-      );
-
       const summary = dayVisitorSummary[dateKey];
-      if (summary && summary.count > 1) {
-        separators.push(
-          <div key={`sum-${dateKey}`} className="mt-2 col-span-full">
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
-                Summe Besucherzahlen
-              </div>
-              <div className="mt-0.5 text-xs font-medium text-emerald-800">
-                {formatDateSeparatorLabel(dateKey)}
-              </div>
-              <div className="mt-1 flex items-baseline justify-between gap-3">
-                <div className="text-3xl font-semibold leading-none text-emerald-900">
-                  {summary.total}
-                </div>
-                <div className="text-xs font-medium text-emerald-800">
-                  {summary.count} Events
+      const totalVisitors = summary?.total ?? 0;
+      const submittedCount = summary?.count ?? 0;
+      const totalEvents = dayTotalEvents[dateKey] ?? 0;
+      const dateDisplay = formatDate(dateKey);
+
+      separators.push(
+        <div key={`sum-${dateKey}`} className="col-span-full">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
+              Summe Besucherzahlen
+            </div>
+            <div className="mt-1 text-[11px] font-medium text-emerald-800">
+              {dateDisplay}
+            </div>
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <div className="text-3xl font-semibold text-emerald-900">{totalVisitors}</div>
+              <div className="text-right">
+                <div className="text-[11px] font-medium text-emerald-800">
+                  Erfasst: {submittedCount}/{totalEvents} Events
                 </div>
               </div>
             </div>
           </div>
-        );
-      }
-
+        </div>
+      );
       lastDateKey = dateKey;
     }
 

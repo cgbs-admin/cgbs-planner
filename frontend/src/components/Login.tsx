@@ -1,5 +1,5 @@
 // src/components/Login.extended.tsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { apiFetch, setAuthToken } from "../api";
 
 interface LoginProps {
@@ -9,7 +9,7 @@ interface LoginProps {
 type FocusField = "username" | "password" | null;
 
 const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
-  const [username, setUsername] = useState("admin");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +18,12 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [hoverLogin, setHoverLogin] = useState(false);
   const [pressLogin, setPressLogin] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Ensure fields are always blank when the login screen is shown.
+  useEffect(() => {
+    setUsername("");
+    setPassword("");
+  }, []);
 
   const brand = useMemo(
     () => ({
@@ -168,7 +174,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <form onSubmit={handleSubmit} autoComplete="off" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div>
               <label
                 htmlFor="login-username"
@@ -183,7 +189,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 onChange={(e) => setUsername(e.target.value)}
                 onFocus={() => setFocusField("username")}
                 onBlur={() => setFocusField((prev) => (prev === "username" ? null : prev))}
-                autoComplete="username"
+                autoComplete="off"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
@@ -212,7 +218,7 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                   onChange={(e) => setPassword(e.target.value)}
                   onFocus={() => setFocusField("password")}
                   onBlur={() => setFocusField((prev) => (prev === "password" ? null : prev))}
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   enterKeyHint="done"
                   style={{
                     ...fieldBaseStyle,
