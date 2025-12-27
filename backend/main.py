@@ -1416,7 +1416,7 @@ def update_reporting_entry(
 def delete_reporting_entry(
     reporting_id: int,
     db: Session = Depends(get_db),
-    current_admin: models.User = Depends(get_current_admin),
+    current_welcome: models.User = Depends(get_current_welcome),
 ):
     """
     Delete a reporting entry from the reporting table UI.

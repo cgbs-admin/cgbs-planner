@@ -125,7 +125,6 @@ const MobileVisitorsPage: React.FC = () => {
 
   const [savedReportingIds, setSavedReportingIds] = useState<SavedReportingIdsByEvent>({});
   const [savingFor, setSavingFor] = useState<number | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [editingFor, setEditingFor] = useState<Record<number, boolean>>({});
   const [deleteConfirmFor, setDeleteConfirmFor] = useState<number | null>(null);
@@ -369,12 +368,6 @@ const MobileVisitorsPage: React.FC = () => {
     void loadEvents();
   }, [loadEvents]);
 
-  useEffect(() => {
-    if (!successMessage) return;
-    const t = window.setTimeout(() => setSuccessMessage(null), 2500);
-    return () => window.clearTimeout(t);
-  }, [successMessage]);
-
   const handleChangeVisitor = (eventId: number, value: string) => {
     setVisitorsInput((prev) => ({
       ...prev,
@@ -474,7 +467,6 @@ const MobileVisitorsPage: React.FC = () => {
 
     setSavingFor(eventId);
     setError(null);
-    setSuccessMessage(null);
 
     try {
       const body: any = {
@@ -559,8 +551,6 @@ const MobileVisitorsPage: React.FC = () => {
       } catch {
         // ignore refresh errors
       }
-
-      setSuccessMessage("Besucherzahl erfolgreich gespeichert.");
     } catch (err: any) {
       console.error("Failed to save visitor count", err);
       setError(err?.message || "Besucherzahl konnte nicht gespeichert werden. Bitte erneut versuchen.");
@@ -571,7 +561,6 @@ const MobileVisitorsPage: React.FC = () => {
 
   const openDeleteConfirm = (eventId: number) => {
     setError(null);
-    setSuccessMessage(null);
     setDeleteConfirmFor(eventId);
   };
 
@@ -621,7 +610,6 @@ const MobileVisitorsPage: React.FC = () => {
 
     setDeletingFor(eventId);
     setError(null);
-    setSuccessMessage(null);
 
     try {
       await deleteStoredVisitor(eventId);
@@ -671,8 +659,6 @@ const MobileVisitorsPage: React.FC = () => {
         delete next[eventId];
         return next;
       });
-
-      setSuccessMessage("Besucherzahl wurde gelöscht.");
       setDeleteConfirmFor(null);
     } catch (err: any) {
       console.error("Failed to delete visitor count", err);
@@ -743,6 +729,9 @@ const MobileVisitorsPage: React.FC = () => {
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-800">
                 Summe Besucherzahlen
+              </div>
+              <div className="mt-0.5 text-xs font-medium text-emerald-800">
+                {formatDateSeparatorLabel(dateKey)}
               </div>
               <div className="mt-1 flex items-baseline justify-between gap-3">
                 <div className="text-3xl font-semibold leading-none text-emerald-900">
@@ -945,16 +934,6 @@ const MobileVisitorsPage: React.FC = () => {
           aria-live="polite"
         >
           {error}
-        </div>
-      )}
-
-      {successMessage && (
-        <div
-          className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700"
-          role="status"
-          aria-live="polite"
-        >
-          {successMessage}
         </div>
       )}
 
